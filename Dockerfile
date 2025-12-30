@@ -4,10 +4,14 @@ FROM python:3.12-slim AS deps
 # Install uv
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 
+# Set working directory
+WORKDIR /app
+
 # Copy dependency files
 COPY pyproject.toml ./
 
 # Install dependencies (generate lockfile if needed)
+# uv sync creates .venv in the current working directory
 RUN uv sync --no-dev
 
 # Application stage
@@ -21,11 +25,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ffmpeg \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy virtual environment from deps stage
-COPY --from=deps /.venv /app/.venv
-
 # Set working directory
 WORKDIR /app
+
+# Copy virtual environment from deps stage
+# uv creates .venv in the working directory (/app/.venv)
+COPY --from=deps /app/.venv /app/.venv
 
 # Copy application code
 COPY . .
