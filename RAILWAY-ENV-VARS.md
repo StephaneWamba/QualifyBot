@@ -61,20 +61,30 @@ The application code automatically detects and uses `DATABASE_URL` and `REDIS_UR
 
 ## Redis with RediSearch
 
-**Important**: Railway's default Redis doesn't include RediSearch module, which is required by `langgraph-checkpoint-redis`.
+**Important**: Railway's default Redis and **Upstash Redis do NOT support RediSearch**.
 
-### Option 1: Use Upstash Redis (Recommended)
+The `langgraph-checkpoint-redis` package requires RediSearch module for checkpointing.
 
-1. Go to https://upstash.com
-2. Create a Redis database with **RediSearch** enabled
-3. Copy the Redis URL
+### Option 1: Deploy Redis Stack in Railway (Recommended)
+
+1. In Railway, click "New" → "Template"
+2. Search for "Redis Stack" and deploy it
+3. This includes RediSearch, RedisJSON, and other modules
+4. Connect it to your main service
+5. Set `REDIS_URL` to point to the Redis Stack service
+
+### Option 2: Use Redis Cloud (Paid, but has RediSearch)
+
+1. Sign up at https://redis.com/try-free/ (free tier available)
+2. Create a database with RediSearch enabled
+3. Copy the connection URL
 4. In Railway, add environment variable:
    ```
-   REDIS_URL=rediss://your-upstash-redis-url
+   REDIS_URL=rediss://your-redis-cloud-url
    ```
 5. This will override Railway's default Redis URL
 
-### Option 2: Use Memory Checkpointer (Not for Production)
+### Option 3: Use Memory Checkpointer (Development/Testing Only)
 
 If you don't set `REDIS_URL` or Railway's Redis doesn't have RediSearch, the app will fall back to memory checkpointer. This works for testing but **not recommended for production** as state is lost on restart.
 
