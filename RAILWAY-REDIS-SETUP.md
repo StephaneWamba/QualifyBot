@@ -11,6 +11,7 @@ Railway automatically provides environment variables for connected services.
 ### Steps:
 
 1. **In your main API service** (not the Redis Stack service):
+
    - Go to your API service → **Variables** tab
    - Railway should automatically provide these variables:
      - `REDIS_HOST` - The Redis Stack service hostname
@@ -19,14 +20,25 @@ Railway automatically provides environment variables for connected services.
      - `REDIS_URL` - The full connection URL (if Railway generates it)
 
 2. **If Railway doesn't auto-generate `REDIS_URL`**, construct it manually:
+
+   **Important**: Remove quotes and use Railway's variable names:
    ```
-   redis://default:${REDIS_PASSWORD}@${REDIS_HOST}:${REDIS_PORT}
+   REDIS_URL=redis://default:${REDISPASSWORD}@${REDISHOST}:${REDISPORT}
    ```
    
-   Or if you have the private domain:
+   **OR** if Railway provides service-specific variables (check your Variables tab):
    ```
-   redis://default:${REDIS_PASSWORD}@${RAILWAY_PRIVATE_DOMAIN}:6379
+   REDIS_URL=redis://default:${REDIS_PASSWORD}@${REDIS_HOST}:6379
    ```
+   
+   **OR** using private domain (if available):
+   ```
+   REDIS_URL=redis://default:${REDIS_PASSWORD}@${RAILWAY_PRIVATE_DOMAIN}:6379
+   ```
+   
+   **Note**: Railway may not expand variables inside quotes. Use without quotes:
+   - ✅ `REDIS_URL=redis://default:${REDIS_PASSWORD}@${RAILWAY_PRIVATE_DOMAIN}:6379`
+   - ❌ `REDIS_URL="redis://default:${REDIS_PASSWORD}@${RAILWAY_PRIVATE_DOMAIN}:6379"`
 
 3. **Check available variables**:
    - In your API service → Variables tab
@@ -38,10 +50,12 @@ Railway automatically provides environment variables for connected services.
 If you have the connection string from the Redis Stack service:
 
 1. **Get the connection details** from Redis Stack service:
+
    - Go to Redis Stack service → **Variables** tab
    - Note the values (they might be shown as `${{ REDIS_PASSWORD }}` etc.)
 
 2. **In your API service** → Variables tab:
+
    - Add: `REDIS_URL=redis://default:YOUR_ACTUAL_PASSWORD@YOUR_ACTUAL_HOST:6379`
    - Replace placeholders with actual values
 
@@ -55,6 +69,7 @@ If you have the connection string from the Redis Stack service:
 Railway services in the same project can communicate via private network:
 
 1. **In your API service** → Variables:
+
    - Set: `REDIS_URL=redis://default:${REDIS_PASSWORD}@${REDIS_HOST}:6379`
    - Railway will resolve `${REDIS_HOST}` and `${REDIS_PASSWORD}` automatically
 
@@ -67,10 +82,12 @@ Railway services in the same project can communicate via private network:
 After setting `REDIS_URL`:
 
 1. **Check Railway logs** for your API service:
+
    - Look for: `Redis checkpointer initialized` ✅
    - If you see: `Using memory checkpointer` ⚠️ - Redis connection failed
 
 2. **Test the connection**:
+
    - Check `/health/ready` endpoint
    - Should show: `"redis": "connected"`
 
@@ -85,13 +102,15 @@ After setting `REDIS_URL`:
 ### Issue: Variables show as `${{ REDIS_PASSWORD }}`
 
 **Solution**: These are Railway template variables. To use them:
+
 - Railway resolves them automatically in the same service
 - For cross-service, use the actual variable names Railway provides
 - Or manually copy the actual values
 
 ### Issue: Connection refused
 
-**Solution**: 
+**Solution**:
+
 - Ensure Redis Stack service is running
 - Check that you're using the correct hostname/port
 - Verify services are in the same Railway project
@@ -99,10 +118,10 @@ After setting `REDIS_URL`:
 ### Issue: Authentication failed
 
 **Solution**:
+
 - Check the password matches between services
 - Verify `REDIS_PASSWORD` is set correctly
 - Some Redis Stack configs don't require a password - try without it:
   ```
   redis://${REDIS_HOST}:6379
   ```
-
