@@ -115,7 +115,7 @@ async def readiness_check():
     
     Checks if all required services (database, Redis) are connected.
     """
-    from src.database.connection import get_db
+    from src.database.connection import engine
     from src.agent.checkpoint import get_checkpointer
     
     checks = {
@@ -124,13 +124,12 @@ async def readiness_check():
         "redis": "unknown",
     }
     
-    # Check database
+    # Check database connection
     try:
-        db = await get_db()
-        if db:
-            checks["database"] = "connected"
-        else:
-            checks["database"] = "not_connected"
+        # Test database connection by executing a simple query
+        async with engine.begin() as conn:
+            await conn.execute("SELECT 1")
+        checks["database"] = "connected"
     except Exception as e:
         checks["database"] = f"error: {str(e)}"
         checks["status"] = "degraded"
@@ -142,6 +141,7 @@ async def readiness_check():
             checks["redis"] = "connected"
         else:
             checks["redis"] = "not_connected"
+            checks["status"] = "degraded"
     except Exception as e:
         checks["redis"] = f"error: {str(e)}"
         checks["status"] = "degraded"
