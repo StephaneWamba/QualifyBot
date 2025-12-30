@@ -30,48 +30,58 @@ async def handle_webhook(
     - Call ends
     """
     # Validate Twilio request
-    # Twilio signs requests with the HTTPS URL, but FastAPI might see HTTP behind proxy
-    # Check X-Forwarded-Proto header or use HTTPS if behind cloudflared
-    forwarded_proto = request.headers.get("X-Forwarded-Proto", "")
-    if forwarded_proto == "https" or request.url.scheme == "https":
-        # Already HTTPS
-        url = str(request.url)
-    else:
-        # Behind proxy (cloudflared) - Twilio signed with HTTPS URL
-        url = str(request.url).replace("http://", "https://")
-    
+    # Railway terminates SSL at the edge and forwards HTTP, but Twilio signs with HTTPS
+    # We need to construct the HTTPS URL for validation using the Host header
     form_data = await request.form()
     params = {key: value for key, value in form_data.items()}
     signature = request.headers.get("X-Twilio-Signature", "")
     
+    # Get the host from headers (Railway sets this correctly)
+    host = request.headers.get("Host", "")
+    forwarded_proto = request.headers.get("X-Forwarded-Proto", "")
+    
+    # Construct the validation URL - always use HTTPS if X-Forwarded-Proto indicates HTTPS
+    # or if we're in production (Railway always uses HTTPS publicly)
+    if forwarded_proto == "https" or settings.ENVIRONMENT == "production":
+        # Use HTTPS for validation (Twilio signs with HTTPS)
+        scheme = "https"
+    else:
+        # Development - use the actual request scheme
+        scheme = request.url.scheme
+    
+    # Build the full URL for validation
+    if host:
+        # Use Host header to construct URL (most reliable behind proxies)
+        validation_url = f"{scheme}://{host}{request.url.path}"
+        if request.url.query:
+            validation_url += f"?{request.url.query}"
+    else:
+        # Fallback to request URL, but force HTTPS if needed
+        validation_url = str(request.url)
+        if scheme == "https" and validation_url.startswith("http://"):
+            validation_url = validation_url.replace("http://", "https://", 1)
+    
     logger.debug(
         "Validating Twilio signature",
-        url=url,
+        original_url=str(request.url),
+        validation_url=validation_url,
         has_signature=bool(signature),
         param_count=len(params),
+        forwarded_proto=forwarded_proto,
+        host=host,
     )
     
     validator = RequestValidator(settings.TWILIO_AUTH_TOKEN)
     
-    # Log signature validation details
-    logger.info(
-        "Validating Twilio signature",
-        url=url,
-        has_signature=bool(signature),
-        signature_length=len(signature) if signature else 0,
-        param_count=len(params),
-        params_keys=list(params.keys())[:5],  # First 5 keys for debugging
-    )
-    
-    # Try validation with HTTPS URL first (Twilio signs with HTTPS)
-    validation_url = url.replace("http://", "https://") if url.startswith("http://") else url
+    # Validate with the HTTPS URL (Twilio always signs with HTTPS)
     is_valid = validator.validate(validation_url, params, signature)
     
     if not is_valid:
-        # Try with original URL as fallback
-        is_valid = validator.validate(url, params, signature)
+        # Try with original URL as fallback (for local development)
+        original_url = str(request.url)
+        is_valid = validator.validate(original_url, params, signature)
         if is_valid:
-            validation_url = url
+            validation_url = original_url
             logger.debug("Signature valid with original URL")
     
     if not is_valid:
@@ -79,16 +89,20 @@ async def handle_webhook(
         if settings.ENVIRONMENT == "development":
             logger.warning(
                 "Invalid Twilio signature (allowing in dev)",
-                url=url,
+                original_url=str(request.url),
                 validation_url=validation_url,
                 has_signature=bool(signature),
+                host=host,
+                forwarded_proto=forwarded_proto,
             )
             # Continue processing in dev mode
         else:
             logger.error(
                 "Invalid Twilio request signature",
-                url=url,
+                original_url=str(request.url),
                 validation_url=validation_url,
+                host=host,
+                forwarded_proto=forwarded_proto,
             )
             return Response(content="Invalid signature", status_code=403)
 
