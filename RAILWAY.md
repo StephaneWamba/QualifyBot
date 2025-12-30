@@ -95,8 +95,8 @@ Railway automatically sets these when you add services:
 - `DATABASE_URL` - Automatically set when you add PostgreSQL service
   - Format: `postgresql://user:password@host:port/dbname`
   - The code automatically converts it to `postgresql+asyncpg://` for SQLAlchemy
-  
 - `REDIS_URL` - Automatically set when you add Redis service
+
   - Format: `redis://host:port` or `rediss://host:port` (for SSL)
   - **Important**: Railway's default Redis doesn't include RediSearch
   - If you see `FT._LIST` errors, use Upstash Redis with RediSearch instead
