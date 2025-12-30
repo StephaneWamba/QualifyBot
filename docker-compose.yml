@@ -1,0 +1,55 @@
+
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    ports:
+      - "10000:8000"
+    environment:
+      - ENVIRONMENT=development
+      - DEBUG=true
+      # Override hostnames for Docker services
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379  # Internal Docker port (not the mapped port)
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432  # Internal Docker port (not the mapped port)
+    env_file:
+      - .env
+    volumes:
+      - .:/app
+      - /app/.venv  # Exclude venv from volume mount
+      - /app/__pycache__  # Exclude Python cache
+      - /app/.git  # Exclude git directory
+    mem_limit: 2g  # Limit memory to prevent file watcher issues
+    depends_on:
+      - redis
+      - postgres
+    restart: unless-stopped
+
+  redis:
+    # Use redis-stack-server which includes RediSearch module required by langgraph-checkpoint-redis
+    image: redis/redis-stack-server:latest
+    ports:
+      - "6383:6379"
+    volumes:
+      - redis_data:/data
+    restart: unless-stopped
+    # redis-stack-server includes RediSearch by default, no additional command needed
+
+  postgres:
+    image: postgres:16-alpine
+    ports:
+      - "5436:5432"
+    environment:
+      - POSTGRES_USER=qualifybot
+      - POSTGRES_PASSWORD=qualifybot
+      - POSTGRES_DB=qualifybot
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    restart: unless-stopped
+
+volumes:
+  redis_data:
+  postgres_data:
+
