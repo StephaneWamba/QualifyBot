@@ -127,8 +127,9 @@ async def readiness_check():
     # Check database connection
     try:
         # Test database connection by executing a simple query
+        from sqlalchemy import text
         async with engine.begin() as conn:
-            await conn.execute("SELECT 1")
+            await conn.execute(text("SELECT 1"))
         checks["database"] = "connected"
     except Exception as e:
         checks["database"] = f"error: {str(e)}"
