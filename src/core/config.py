@@ -15,23 +15,23 @@ class Settings(BaseSettings):
     CORS_ORIGINS: list[str] = ["*"]
 
     # Twilio
-    TWILIO_ACCOUNT_SID: str
-    TWILIO_AUTH_TOKEN: str
-    TWILIO_PHONE_NUMBER: str
-    TWILIO_WEBHOOK_URL: str
+    TWILIO_ACCOUNT_SID: str = ""
+    TWILIO_AUTH_TOKEN: str = ""
+    TWILIO_PHONE_NUMBER: str = ""
+    TWILIO_WEBHOOK_URL: str = ""
 
     # OpenAI
-    OPENAI_API_KEY: str
+    OPENAI_API_KEY: str = ""
     OPENAI_MODEL: str = "gpt-4o-mini"
 
     # ElevenLabs
-    ELEVENLABS_API_KEY: str
+    ELEVENLABS_API_KEY: str = ""
     ELEVENLABS_VOICE_ID: str = "21m00Tcm4TlvDq8ikWAM"  # Default voice
 
     # Salesforce
-    SALESFORCE_USERNAME: str
-    SALESFORCE_PASSWORD: str
-    SALESFORCE_SECURITY_TOKEN: str
+    SALESFORCE_USERNAME: str = ""
+    SALESFORCE_PASSWORD: str = ""
+    SALESFORCE_SECURITY_TOKEN: str = ""
     SALESFORCE_DOMAIN: str = "login"  # or "test" for sandbox
 
     # Redis

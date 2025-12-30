@@ -21,16 +21,34 @@ async def lifespan(app: FastAPI):
     """Application lifespan events."""
     # Startup
     logger.info("Starting QualifyBot API")
-    await init_db()
-    await init_checkpointer()
+    try:
+        await init_db()
+    except Exception as e:
+        logger.error("Failed to initialize database", error=str(e), exc_info=True)
+        # Don't fail startup - health check will show degraded status
+    
+    try:
+        await init_checkpointer()
+    except Exception as e:
+        logger.error("Failed to initialize checkpointer", error=str(e), exc_info=True)
+        # Don't fail startup - will fall back to memory checkpointer
+    
     logger.info("QualifyBot API started")
 
     yield
 
     # Shutdown
     logger.info("Shutting down QualifyBot API")
-    await close_checkpointer()
-    await close_db()
+    try:
+        await close_checkpointer()
+    except Exception as e:
+        logger.error("Error closing checkpointer", error=str(e))
+    
+    try:
+        await close_db()
+    except Exception as e:
+        logger.error("Error closing database", error=str(e))
+    
     logger.info("QualifyBot API shut down")
 
 
@@ -81,8 +99,55 @@ app.include_router(router)
 
 @app.get("/health")
 async def health_check():
-    """Health check endpoint."""
+    """
+    Health check endpoint.
+    
+    This endpoint should be accessible even if database/Redis are not connected.
+    Railway uses this to verify the service is running.
+    """
     return {"status": "healthy", "version": "0.1.0"}
+
+
+@app.get("/health/ready")
+async def readiness_check():
+    """
+    Readiness check endpoint.
+    
+    Checks if all required services (database, Redis) are connected.
+    """
+    from src.database.connection import get_db
+    from src.agent.checkpoint import get_checkpointer
+    
+    checks = {
+        "status": "ready",
+        "database": "unknown",
+        "redis": "unknown",
+    }
+    
+    # Check database
+    try:
+        db = await get_db()
+        if db:
+            checks["database"] = "connected"
+        else:
+            checks["database"] = "not_connected"
+    except Exception as e:
+        checks["database"] = f"error: {str(e)}"
+        checks["status"] = "degraded"
+    
+    # Check Redis/checkpointer
+    try:
+        checkpointer = get_checkpointer()
+        if checkpointer:
+            checks["redis"] = "connected"
+        else:
+            checks["redis"] = "not_connected"
+    except Exception as e:
+        checks["redis"] = f"error: {str(e)}"
+        checks["status"] = "degraded"
+    
+    status_code = 200 if checks["status"] == "ready" else 503
+    return checks
 
 
 if __name__ == "__main__":

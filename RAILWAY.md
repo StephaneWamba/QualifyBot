@@ -35,11 +35,13 @@ git push -u origin main
 Railway will deploy the main service automatically. You need to add:
 
 #### PostgreSQL Database
+
 1. Click "New" → "Database" → "Add PostgreSQL"
 2. Railway will create a PostgreSQL database
 3. The `DATABASE_URL` environment variable will be automatically set
 
 #### Redis Database (with RediSearch)
+
 1. Click "New" → "Database" → "Add Redis"
 2. **Important**: Railway's default Redis doesn't include RediSearch
 3. You have two options:
@@ -110,6 +112,7 @@ SENTRY_ENVIRONMENT=production
 ### 7. Deploy
 
 Railway will automatically deploy when you push to GitHub. You can also:
+
 - Click "Deploy" in Railway dashboard
 - Or trigger a manual deploy
 
@@ -124,6 +127,7 @@ Railway will automatically deploy when you push to GitHub. You can also:
 ### Redis Search Error
 
 If you see `unknown command 'FT._LIST'`:
+
 - Railway's default Redis doesn't include RediSearch
 - Use Upstash Redis with RediSearch or fall back to memory checkpointer
 
@@ -155,4 +159,3 @@ Make sure `TWILIO_WEBHOOK_URL` matches your Railway domain exactly.
 - [ ] Test call successful
 - [ ] Sentry configured (optional)
 - [ ] Custom domain configured (optional)
-
