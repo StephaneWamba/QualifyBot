@@ -46,5 +46,6 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
     CMD python -c "import httpx; import os; port = os.getenv('PORT', '8000'); httpx.get(f'http://localhost:{port}/health')"
 
 # Run application (Railway sets PORT env var)
-CMD ["sh", "-c", "uvicorn src.main:app --host 0.0.0.0 --port ${PORT:-8000}"]
+# Use shell form to properly expand PORT variable
+CMD uvicorn src.main:app --host 0.0.0.0 --port ${PORT:-8000}
 
