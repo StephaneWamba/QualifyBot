@@ -42,15 +42,21 @@ Railway will deploy the main service automatically. You need to add:
 
 #### Redis Database (with RediSearch)
 
-1. Click "New" → "Database" → "Add Redis"
-2. **Important**: Railway's default Redis doesn't include RediSearch
-3. You have two options:
-   - **Option A**: Use Railway's Redis and fall back to memory checkpointer (not recommended for production)
-   - **Option B**: Use Upstash Redis with RediSearch module (recommended)
-     - Go to https://upstash.com
-     - Create a Redis database with RediSearch enabled
-     - Copy the Redis URL
-     - Add it as `REDIS_URL` environment variable in Railway
+**IMPORTANT**: You need **Redis Stack** (not standard Redis) for RediSearch support.
+
+1. Click "New" → "Template" → Search for "Redis Stack"
+2. Deploy the **Redis Stack** template (includes RediSearch, RedisJSON, RedisTimeSeries)
+3. Railway will automatically set `REDIS_URL` environment variable
+4. The Redis Stack template includes RediSearch module required by `langgraph-checkpoint-redis`
+
+**If you already added standard Redis:**
+- Remove the standard Redis service
+- Add Redis Stack template instead
+- Or use Upstash Redis with RediSearch:
+  - Go to https://upstash.com
+  - Create a Redis database with RediSearch enabled
+  - Copy the Redis URL
+  - Add it as `REDIS_URL` environment variable in Railway (this overrides Railway's Redis)
 
 ### 4. Configure Environment Variables
 
