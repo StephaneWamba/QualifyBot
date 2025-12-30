@@ -90,9 +90,25 @@ SENTRY_ENVIRONMENT=production
 
 #### Auto-configured by Railway
 
-- `DATABASE_URL` - Automatically set when you add PostgreSQL
-- `REDIS_URL` - Set if you add Redis service (or use Upstash)
-- `PORT` - Automatically set by Railway
+Railway automatically sets these when you add services:
+
+- `DATABASE_URL` - Automatically set when you add PostgreSQL service
+  - Format: `postgresql://user:password@host:port/dbname`
+  - The code automatically converts it to `postgresql+asyncpg://` for SQLAlchemy
+  
+- `REDIS_URL` - Automatically set when you add Redis service
+  - Format: `redis://host:port` or `rediss://host:port` (for SSL)
+  - **Important**: Railway's default Redis doesn't include RediSearch
+  - If you see `FT._LIST` errors, use Upstash Redis with RediSearch instead
+
+- `PORT` - Automatically set by Railway (don't set this manually)
+
+#### You DON'T need to set these manually:
+
+- ❌ `POSTGRES_HOST`, `POSTGRES_PORT`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB`
+- ❌ `REDIS_HOST`, `REDIS_PORT`, `REDIS_DB`, `REDIS_PASSWORD`
+
+The code will automatically use `DATABASE_URL` and `REDIS_URL` if they're provided by Railway.
 
 ### 5. Get Your Railway Domain
 
