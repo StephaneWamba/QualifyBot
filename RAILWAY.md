@@ -42,21 +42,15 @@ Railway will deploy the main service automatically. You need to add:
 
 #### Redis Database (with RediSearch)
 
-**IMPORTANT**: You need **Redis Stack** (not standard Redis) for RediSearch support.
-
-1. Click "New" → "Template" → Search for "Redis Stack"
-2. Deploy the **Redis Stack** template (includes RediSearch, RedisJSON, RedisTimeSeries)
-3. Railway will automatically set `REDIS_URL` environment variable
-4. The Redis Stack template includes RediSearch module required by `langgraph-checkpoint-redis`
-
-**If you already added standard Redis:**
-- Remove the standard Redis service
-- Add Redis Stack template instead
-- Or use Upstash Redis with RediSearch:
-  - Go to https://upstash.com
-  - Create a Redis database with RediSearch enabled
-  - Copy the Redis URL
-  - Add it as `REDIS_URL` environment variable in Railway (this overrides Railway's Redis)
+1. Click "New" → "Database" → "Add Redis"
+2. **Important**: Railway's default Redis doesn't include RediSearch
+3. You have two options:
+   - **Option A**: Use Railway's Redis and fall back to memory checkpointer (not recommended for production)
+   - **Option B**: Use Upstash Redis with RediSearch module (recommended)
+     - Go to https://upstash.com
+     - Create a Redis database with RediSearch enabled
+     - Copy the Redis URL
+     - Add it as `REDIS_URL` environment variable in Railway
 
 ### 4. Configure Environment Variables
 
@@ -101,11 +95,11 @@ Railway automatically sets these when you add services:
 - `DATABASE_URL` - Automatically set when you add PostgreSQL service
   - Format: `postgresql://user:password@host:port/dbname`
   - The code automatically converts it to `postgresql+asyncpg://` for SQLAlchemy
-- `REDIS_URL` - Automatically set when you add Redis service
-
+- `REDIS_URL` - Automatically set when you add Redis service (if using Railway's Redis)
   - Format: `redis://host:port` or `rediss://host:port` (for SSL)
-  - **Important**: Railway's default Redis doesn't include RediSearch
-  - If you see `FT._LIST` errors, use Upstash Redis with RediSearch instead
+  - **Important**: Railway's default Redis and Upstash Redis **do NOT support RediSearch**
+  - If you see `FT._LIST` errors, you need Redis Stack or Redis Cloud with RediSearch
+  - Or the app will fall back to memory checkpointer (not for production)
 
 - `PORT` - Automatically set by Railway (don't set this manually)
 
@@ -150,8 +144,11 @@ Railway will automatically deploy when you push to GitHub. You can also:
 
 If you see `unknown command 'FT._LIST'`:
 
-- Railway's default Redis doesn't include RediSearch
-- Use Upstash Redis with RediSearch or fall back to memory checkpointer
+- Railway's default Redis and Upstash Redis **do NOT support RediSearch**
+- Options:
+  1. Deploy Redis Stack in Railway (template available)
+  2. Use Redis Cloud (paid service with RediSearch)
+  3. Fall back to memory checkpointer (development only, not for production)
 
 ### Port Issues
 
