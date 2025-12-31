@@ -34,6 +34,10 @@ async def lifespan(app: FastAPI):
         # Don't fail startup - will fall back to memory checkpointer
     
     logger.info("QualifyBot API started")
+    
+    # Log registered WebSocket routes for debugging
+    ws_routes = [route.path for route in app.routes if hasattr(route, "path") and "websocket" in str(type(route)).lower()]
+    logger.info("Registered WebSocket routes", routes=ws_routes)
 
     yield
 
@@ -60,12 +64,21 @@ app = FastAPI(
 )
 
 
-# Add request logging middleware (skip WebSocket connections)
+# Add request logging middleware (log WebSocket upgrade attempts)
 @app.middleware("http")
 async def log_requests(request: Request, call_next):
     """Log all incoming requests."""
-    # Skip WebSocket upgrade requests
+    # Log WebSocket upgrade requests
     if request.headers.get("upgrade", "").lower() == "websocket":
+        logger.info(
+            "WebSocket upgrade request received",
+            method=request.method,
+            url=str(request.url),
+            path=request.url.path,
+            client=request.client.host if request.client else None,
+            upgrade_header=request.headers.get("upgrade"),
+            connection_header=request.headers.get("connection"),
+        )
         return await call_next(request)
     
     logger.info(
