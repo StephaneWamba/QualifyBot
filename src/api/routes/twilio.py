@@ -123,35 +123,20 @@ async def handle_webhook(
             
             # Start Media Stream
             # Media Streams requires WebSocket URL (wss://)
-            # Use the incoming request's host to build the URL dynamically
-            # This handles cloudflared URL changes automatically
-            host = request.headers.get("Host", "")
-            if not host:
-                # Fallback to TWILIO_WEBHOOK_URL if Host header is missing
-                base_url = settings.TWILIO_WEBHOOK_URL.replace("/webhook", "")
-                if base_url.startswith("https://"):
-                    host = base_url.replace("https://", "").split("/")[0]
-                elif base_url.startswith("http://"):
-                    host = base_url.replace("http://", "").split("/")[0]
-                else:
-                    host = base_url.split("/")[0]
+            # Hardcoded for Railway production
+            media_stream_url = "wss://qualifybot-production.up.railway.app/api/v1/twilio/media-stream?call_sid={CallSid}".format(CallSid=CallSid)
             
-            # Determine protocol (wss for HTTPS, ws for HTTP)
-            # Behind cloudflared, we should always use wss
-            forwarded_proto = request.headers.get("X-Forwarded-Proto", "https")
-            scheme = "wss" if forwarded_proto == "https" or request.url.scheme == "https" else "ws"
-            
-            # Build Media Stream WebSocket URL
-            media_stream_url = f"{scheme}://{host}/api/v1/twilio/media-stream?call_sid={CallSid}"
+            logger.info("Starting Media Stream", call_sid=CallSid, url=media_stream_url)
             
             # Start Media Stream - all audio will flow through WebSocket
             response.start().stream(url=media_stream_url)
             
-            logger.info("Media Stream started", call_sid=CallSid, url=media_stream_url, host=host)
+            twiml_xml = str(response)
+            logger.info("Media Stream TwiML generated", call_sid=CallSid, twiml_length=len(twiml_xml))
             
-            return Response(content=str(response), media_type="application/xml")
+            return Response(content=twiml_xml, media_type="application/xml")
         except Exception as e:
-            logger.error("Failed to start Media Stream", call_sid=CallSid, error=str(e))
+            logger.error("Failed to start Media Stream", call_sid=CallSid, error=str(e), exc_info=True)
             response = VoiceResponse()
             response.say(
                 "I'm sorry, I'm having technical difficulties. Please try again later.",
