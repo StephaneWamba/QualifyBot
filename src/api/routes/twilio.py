@@ -129,7 +129,11 @@ async def handle_webhook(
             logger.info("Starting Media Stream", call_sid=CallSid, url=media_stream_url)
             
             # Start Media Stream - all audio will flow through WebSocket
+            # IMPORTANT: Include Pause to keep call active while WebSocket connects
+            # Without this, the call may disconnect before Twilio can establish WebSocket connection
+            # The greeting will be sent via Media Stream, not via Say
             response.start().stream(url=media_stream_url)
+            response.pause(length=60)  # Keep call active for 60 seconds to allow WebSocket connection
             
             twiml_xml = str(response)
             logger.info("Media Stream TwiML generated", call_sid=CallSid, twiml_length=len(twiml_xml), twiml=twiml_xml)
