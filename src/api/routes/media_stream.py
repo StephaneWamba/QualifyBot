@@ -18,6 +18,12 @@ logger = get_logger(__name__)
 router = APIRouter(prefix="/twilio", tags=["twilio"])
 
 
+@router.get("/media-stream")
+async def test_media_stream_endpoint():
+    """Test endpoint to verify the route is accessible."""
+    return {"status": "ok", "message": "Media Stream endpoint is accessible", "websocket_url": "/api/v1/twilio/media-stream"}
+
+
 async def audio_stream_generator(handler: MediaStreamHandler):
     """Generator for audio chunks from Media Stream."""
     while handler.is_connected:
@@ -34,9 +40,22 @@ async def handle_media_stream(websocket: WebSocket):
     
     Note: Twilio sends call_sid in the 'start' message payload, not as a query parameter.
     """
+    # Log connection attempt - this should fire when WebSocket upgrade request arrives
+    try:
+        logger.info("WebSocket connection attempt received", 
+                    client=websocket.client.host if websocket.client else None,
+                    path=websocket.url.path,
+                    query_params=dict(websocket.query_params) if hasattr(websocket, 'query_params') else None)
+    except Exception as log_error:
+        logger.error("Error logging WebSocket attempt", error=str(log_error))
+    
     # Accept connection first
-    await websocket.accept()
-    logger.info("WebSocket connection accepted", client=websocket.client.host if websocket.client else None)
+    try:
+        await websocket.accept()
+        logger.info("WebSocket connection accepted", client=websocket.client.host if websocket.client else None)
+    except Exception as e:
+        logger.error("Failed to accept WebSocket connection", error=str(e), exc_info=True)
+        raise
     
     call_sid: Optional[str] = None
     from_number: Optional[str] = None

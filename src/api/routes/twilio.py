@@ -123,7 +123,7 @@ async def handle_webhook(
             
             # Start Media Stream
             # Media Streams requires WebSocket URL (wss://)
-            # Hardcoded for Railway production
+            # Hardcoded for Railway production (WebSocket support confirmed)
             media_stream_url = "wss://qualifybot-production.up.railway.app/api/v1/twilio/media-stream?call_sid={CallSid}".format(CallSid=CallSid)
             
             logger.info("Starting Media Stream", call_sid=CallSid, url=media_stream_url)
@@ -132,7 +132,7 @@ async def handle_webhook(
             response.start().stream(url=media_stream_url)
             
             twiml_xml = str(response)
-            logger.info("Media Stream TwiML generated", call_sid=CallSid, twiml_length=len(twiml_xml))
+            logger.info("Media Stream TwiML generated", call_sid=CallSid, twiml_length=len(twiml_xml), twiml=twiml_xml)
             
             return Response(content=twiml_xml, media_type="application/xml")
         except Exception as e:
