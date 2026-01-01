@@ -33,6 +33,10 @@ logs/
 *.db
 *.sqlite
 
+# Runtime data
+vector_db/
+conversations/
+
 # Docker
 .dockerignore
 
@@ -51,4 +55,4 @@ build/
 *.egg-info/
 
 
-/private
+

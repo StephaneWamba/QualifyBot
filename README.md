@@ -1,17 +1,17 @@
 # QualifyBot
 
-**Sales Qualification Voice Bot** - Automated B2B lead qualification via phone calls.
+**IT Support Voice Assistant** - Automated IT helpdesk support via phone calls.
 
 ## Overview
 
-QualifyBot automates sales qualification through structured voice conversations. It asks 6 key questions, extracts data, and creates leads in Salesforce automatically.
+QualifyBot automates IT support through intelligent voice conversations. It helps users troubleshoot issues, retrieves relevant knowledge base articles, and creates support tickets in Jira when escalation is needed.
 
 ## Features
 
-- **Structured Q&A Flow**: 6-question qualification process
-- **Data Extraction**: Automatic extraction from natural speech
-- **Salesforce Integration**: Real-time lead creation
-- **Human-like Voice**: ElevenLabs TTS for natural conversations
+- **Intelligent Troubleshooting**: RAG-powered knowledge base retrieval
+- **Natural Conversations**: Human-like voice interactions with ElevenLabs TTS
+- **Automatic Ticket Creation**: Creates Jira tickets on escalation
+- **Multi-tenant Support**: Isolated knowledge bases per tenant
 - **Low Latency**: <2s end-to-end response time
 - **Production Ready**: Error handling, monitoring, observability
 
@@ -21,9 +21,10 @@ QualifyBot automates sales qualification through structured voice conversations.
 - **STT**: OpenAI Realtime API
 - **TTS**: ElevenLabs
 - **LLM**: OpenAI GPT-4o-mini
-- **CRM**: Salesforce
+- **RAG**: ChromaDB with OpenAI embeddings
+- **Ticketing**: Jira
 - **Backend**: FastAPI (Python)
-- **State**: Redis
+- **State**: Redis (LangGraph checkpoints)
 - **Database**: PostgreSQL
 - **Package Manager**: uv
 
@@ -56,13 +57,14 @@ See [ROADMAP.md](./ROADMAP.md) for implementation plan.
 ```
 QualifyBot/
 ├── src/
-│   ├── core/          # Core services (STT, TTS, state)
-│   ├── crm/           # Salesforce integration
-│   ├── extraction/    # Data extraction logic
+│   ├── core/          # Core services (STT, TTS, config, logging)
+│   ├── agent/         # LangGraph agent (nodes, state, orchestrator)
+│   ├── services/      # Business logic (Jira, KB, tickets, escalation)
+│   ├── database/      # Database models and migrations
 │   └── api/           # FastAPI routes
+├── knowledge_base/    # Sample knowledge base documents
 ├── tests/
-├── docker/
-└── docs/
+└── docker/
 ```
 
 ## Deployment

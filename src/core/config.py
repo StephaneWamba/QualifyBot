@@ -26,13 +26,7 @@ class Settings(BaseSettings):
 
     # ElevenLabs
     ELEVENLABS_API_KEY: str = ""
-    ELEVENLABS_VOICE_ID: str = "21m00Tcm4TlvDq8ikWAM"  # Default voice
-
-    # Salesforce
-    SALESFORCE_USERNAME: str = ""
-    SALESFORCE_PASSWORD: str = ""
-    SALESFORCE_SECURITY_TOKEN: str = ""
-    SALESFORCE_DOMAIN: str = "login"  # or "test" for sandbox
+    ELEVENLABS_VOICE_ID: str = "ErXwobaYiN019PkySvjV"  # Antoni - Professional, Warm Male (en-US)
 
     # Redis
     REDIS_HOST: str = "localhost"
@@ -53,6 +47,23 @@ class Settings(BaseSettings):
     SENTRY_DSN: str | None = None
     SENTRY_ENVIRONMENT: str = "development"
 
+    # RAG / Knowledge Base
+    CHROMA_PERSIST_DIR: str = "./vector_db"
+    EMBEDDING_MODEL: str = "text-embedding-3-small"
+    RAG_TOP_K: int = 3
+    RAG_SIMILARITY_THRESHOLD: float = 0.7
+    KB_CHUNK_SIZE: int = 1000
+    KB_CHUNK_OVERLAP: int = 200
+
+    # Jira
+    JIRA_SERVER: str = ""
+    JIRA_EMAIL: str = ""
+    JIRA_API_TOKEN: str = ""
+    JIRA_PROJECT_KEY: str = "IT"
+    
+    # Default tenant (for multi-tenant support)
+    DEFAULT_TENANT_ID: str = "default"
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",
@@ -69,7 +80,7 @@ class Settings(BaseSettings):
             if self.DATABASE_URL.startswith("postgresql://"):
                 return self.DATABASE_URL.replace("postgresql://", "postgresql+asyncpg://", 1)
             return self.DATABASE_URL
-        
+
         # For Docker, use port 5432 (internal), for local use configured port
         import os
         # Check if we're in Docker (POSTGRES_HOST is 'postgres' or 'redis')
@@ -91,7 +102,7 @@ class Settings(BaseSettings):
         # Railway provides REDIS_URL directly
         if self.REDIS_URL:
             return self.REDIS_URL
-        
+
         import os
         # Check if we're in Docker (REDIS_HOST is 'redis')
         redis_host = os.getenv("REDIS_HOST", self.REDIS_HOST)
@@ -101,11 +112,10 @@ class Settings(BaseSettings):
         else:
             # Local development - use configured port
             redis_port = int(os.getenv("REDIS_PORT", self.REDIS_PORT))
-        
+
         if self.REDIS_PASSWORD:
             return f"redis://:{self.REDIS_PASSWORD}@{redis_host}:{redis_port}/{self.REDIS_DB}"
         return f"redis://{redis_host}:{redis_port}/{self.REDIS_DB}"
 
 
 settings = Settings()
-

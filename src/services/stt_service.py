@@ -35,12 +35,11 @@ class STTService:
             Transcribed text segments
 
         Note:
-            Full implementation requires WebSocket connection to OpenAI Realtime API.
-            This is a placeholder for the actual implementation.
+            Currently uses Whisper API for transcription. Future enhancement: implement
+            OpenAI Realtime API WebSocket connection for lower latency streaming transcription.
         """
         try:
-            # TODO: Implement OpenAI Realtime API WebSocket connection
-            # For now, use Whisper API as fallback
+            # Note: Using Whisper API as fallback until Realtime API WebSocket is implemented
             logger.warning(
                 "Using fallback transcription - Realtime API not yet implemented",
                 session_id=session_id,

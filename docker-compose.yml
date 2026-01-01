@@ -14,6 +14,8 @@ services:
       - REDIS_PORT=6379  # Internal Docker port (not the mapped port)
       - POSTGRES_HOST=postgres
       - POSTGRES_PORT=5432  # Internal Docker port (not the mapped port)
+      # ElevenLabs voice - Antoni (Male voice)
+      - ELEVENLABS_VOICE_ID=ErXwobaYiN019PkySvjV
     env_file:
       - .env
     volumes:

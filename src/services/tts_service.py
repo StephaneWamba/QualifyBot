@@ -13,8 +13,13 @@ class TTSService:
 
     def __init__(self):
         """Initialize ElevenLabs client."""
-        self.client = ElevenLabs(api_key=settings.ELEVENLABS_API_KEY)
+        if not settings.ELEVENLABS_API_KEY:
+            logger.warning("ELEVENLABS_API_KEY is not set - TTS will fail")
+        self.client = ElevenLabs(
+            api_key=settings.ELEVENLABS_API_KEY) if settings.ELEVENLABS_API_KEY else None
         self.voice_id = settings.ELEVENLABS_VOICE_ID
+        logger.info("TTS Service initialized", voice_id=self.voice_id,
+                    has_api_key=bool(settings.ELEVENLABS_API_KEY))
 
     def generate_audio(self, text: str, voice_id: str | None = None) -> bytes:
         """
@@ -28,8 +33,14 @@ class TTSService:
             Audio bytes (MP3 format)
         """
         try:
-            voice = voice_id or self.voice_id
-            logger.debug("Generating TTS audio", text_length=len(text), voice_id=voice)
+            if not self.client:
+                raise ValueError(
+                    "ElevenLabs client not initialized - ELEVENLABS_API_KEY is missing")
+
+            # Always read from settings to get latest voice ID (in case it changed)
+            voice = voice_id or settings.ELEVENLABS_VOICE_ID
+            logger.info("Generating TTS audio", text_length=len(
+                text), voice_id=voice, using_config_voice=voice_id is None)
 
             # Try new API first (text_to_speech.convert)
             try:
@@ -49,7 +60,8 @@ class TTSService:
                 )
                 audio_bytes = b"".join(audio_generator)
 
-            logger.info("TTS audio generated", text_length=len(text), audio_size=len(audio_bytes))
+            logger.info("TTS audio generated", text_length=len(
+                text), audio_size=len(audio_bytes))
             return audio_bytes
 
         except Exception as e:
@@ -69,7 +81,8 @@ class TTSService:
         """
         try:
             voice = voice_id or self.voice_id
-            logger.debug("Generating streaming TTS", text_length=len(text), voice_id=voice)
+            logger.debug("Generating streaming TTS",
+                         text_length=len(text), voice_id=voice)
 
             # Try new API first
             try:
@@ -119,4 +132,3 @@ class TTSService:
 
 # Singleton instance
 tts_service = TTSService()
-

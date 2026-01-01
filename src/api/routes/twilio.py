@@ -1,5 +1,6 @@
 """Twilio webhook routes."""
 
+import uuid
 from fastapi import APIRouter, Form, Request, Response
 from twilio.request_validator import RequestValidator
 from twilio.twiml.voice_response import VoiceResponse
@@ -7,10 +8,63 @@ from twilio.twiml.voice_response import VoiceResponse
 from src.core.config import settings
 from src.core.logging import get_logger
 from src.services.twilio_service import twilio_service
+from src.services.tts_service import tts_service
+from src.agent.orchestrator import support_orchestrator
 
 logger = get_logger(__name__)
 
 router = APIRouter(prefix="/twilio", tags=["twilio"])
+
+_audio_cache: dict[str, bytes] = {}
+
+
+def _build_base_url(request: Request) -> str:
+    """Build base URL for audio and action endpoints."""
+    host = request.headers.get("Host", "")
+    forwarded_proto = request.headers.get("X-Forwarded-Proto", "")
+
+    if forwarded_proto == "https" or settings.ENVIRONMENT == "production":
+        scheme = "https"
+    else:
+        scheme = request.url.scheme
+
+    return f"{scheme}://{host}"
+
+
+async def _validate_twilio_request(request: Request) -> bool:
+    """Validate Twilio webhook signature."""
+    form_data = await request.form()
+    params = {key: value for key, value in form_data.items()}
+    signature = request.headers.get("X-Twilio-Signature", "")
+
+    if not signature:
+        return settings.ENVIRONMENT == "development"
+
+    host = request.headers.get("Host", "")
+    forwarded_proto = request.headers.get("X-Forwarded-Proto", "")
+
+    if forwarded_proto == "https" or settings.ENVIRONMENT == "production":
+        scheme = "https"
+    else:
+        scheme = request.url.scheme
+
+    if host:
+        validation_url = f"{scheme}://{host}{request.url.path}"
+        if request.url.query:
+            validation_url += f"?{request.url.query}"
+    else:
+        validation_url = str(request.url)
+        if scheme == "https" and validation_url.startswith("http://"):
+            validation_url = validation_url.replace("http://", "https://", 1)
+
+    validator = RequestValidator(settings.TWILIO_AUTH_TOKEN)
+    is_valid = validator.validate(validation_url, params, signature)
+
+    if not is_valid and settings.ENVIRONMENT == "development":
+        logger.warning(
+            "Invalid Twilio signature (allowing in dev)", url=validation_url)
+
+    return is_valid or settings.ENVIRONMENT == "development"
 
 
 @router.post("/webhook")
@@ -21,147 +75,140 @@ async def handle_webhook(
     To: str = Form(...),
     CallStatus: str = Form(...),
 ):
-    """
-    Handle Twilio webhook for incoming calls.
+    """Handle Twilio webhook for incoming calls."""
+    if not await _validate_twilio_request(request):
+        return Response(content="Invalid signature", status_code=403)
 
-    This endpoint receives webhooks from Twilio when:
-    - A call is initiated
-    - Call status changes
-    - Call ends
-    """
-    # Validate Twilio request
-    # Railway terminates SSL at the edge and forwards HTTP, but Twilio signs with HTTPS
-    # We need to construct the HTTPS URL for validation using the Host header
-    form_data = await request.form()
-    params = {key: value for key, value in form_data.items()}
-    signature = request.headers.get("X-Twilio-Signature", "")
-    
-    # Get the host from headers (Railway sets this correctly)
-    host = request.headers.get("Host", "")
-    forwarded_proto = request.headers.get("X-Forwarded-Proto", "")
-    
-    # Construct the validation URL - always use HTTPS if X-Forwarded-Proto indicates HTTPS
-    # or if we're in production (Railway always uses HTTPS publicly)
-    if forwarded_proto == "https" or settings.ENVIRONMENT == "production":
-        # Use HTTPS for validation (Twilio signs with HTTPS)
-        scheme = "https"
-    else:
-        # Development - use the actual request scheme
-        scheme = request.url.scheme
-    
-    # Build the full URL for validation
-    if host:
-        # Use Host header to construct URL (most reliable behind proxies)
-        validation_url = f"{scheme}://{host}{request.url.path}"
-        if request.url.query:
-            validation_url += f"?{request.url.query}"
-    else:
-        # Fallback to request URL, but force HTTPS if needed
-        validation_url = str(request.url)
-        if scheme == "https" and validation_url.startswith("http://"):
-            validation_url = validation_url.replace("http://", "https://", 1)
-    
-    logger.debug(
-        "Validating Twilio signature",
-        original_url=str(request.url),
-        validation_url=validation_url,
-        has_signature=bool(signature),
-        param_count=len(params),
-        forwarded_proto=forwarded_proto,
-        host=host,
-    )
-    
-    validator = RequestValidator(settings.TWILIO_AUTH_TOKEN)
-    
-    # Validate with the HTTPS URL (Twilio always signs with HTTPS)
-    is_valid = validator.validate(validation_url, params, signature)
-    
-    if not is_valid:
-        # Try with original URL as fallback (for local development)
-        original_url = str(request.url)
-        is_valid = validator.validate(original_url, params, signature)
-        if is_valid:
-            validation_url = original_url
-            logger.debug("Signature valid with original URL")
-    
-    if not is_valid:
-        # In development, log but don't block (for debugging)
-        if settings.ENVIRONMENT == "development":
-            logger.warning(
-                "Invalid Twilio signature (allowing in dev)",
-                original_url=str(request.url),
-                validation_url=validation_url,
-                has_signature=bool(signature),
-                host=host,
-                forwarded_proto=forwarded_proto,
-            )
-            # Continue processing in dev mode
-        else:
-            logger.error(
-                "Invalid Twilio request signature",
-                original_url=str(request.url),
-                validation_url=validation_url,
-                host=host,
-                forwarded_proto=forwarded_proto,
-            )
-            return Response(content="Invalid signature", status_code=403)
+    logger.info("Twilio webhook received", call_sid=CallSid, status=CallStatus)
 
-    logger.info(
-        "Twilio webhook received",
-        call_sid=CallSid,
-        from_number=From,
-        to_number=To,
-        status=CallStatus,
-    )
-
-    # Handle different webhook types
     if CallStatus == "ringing":
-        # Initial call - return TwiML to start Media Stream
-        # The greeting will be generated and sent by the Media Stream handler
         try:
+            result = await support_orchestrator.start_support(
+                call_sid=CallSid,
+                from_number=From,
+                to_number=To,
+                tenant_id="default",  # Future: Extract from phone number routing or metadata
+                session_id=CallSid,
+            )
+            greeting = result.get("greeting", "Hello! Thanks for calling.")
+
             response = VoiceResponse()
-            
-            # Start Media Stream
-            # Media Streams requires WebSocket URL (wss://)
-            # Hardcoded for Railway production (WebSocket support confirmed)
-            media_stream_url = "wss://qualifybot-production.up.railway.app/api/v1/twilio/media-stream?call_sid={CallSid}".format(CallSid=CallSid)
-            
-            logger.info("Starting Media Stream", call_sid=CallSid, url=media_stream_url)
-            
-            # Start Media Stream - all audio will flow through WebSocket
-            # IMPORTANT: Include Pause to keep call active while WebSocket connects
-            # Without this, the call may disconnect before Twilio can establish WebSocket connection
-            # The greeting will be sent via Media Stream, not via Say
-            response.start().stream(url=media_stream_url)
-            response.pause(length=60)  # Keep call active for 60 seconds to allow WebSocket connection
-            
-            twiml_xml = str(response)
-            logger.info("Media Stream TwiML generated", call_sid=CallSid, twiml_length=len(twiml_xml), twiml=twiml_xml)
-            
-            return Response(content=twiml_xml, media_type="application/xml")
-        except Exception as e:
-            logger.error("Failed to start Media Stream", call_sid=CallSid, error=str(e), exc_info=True)
-            response = VoiceResponse()
-            response.say(
-                "I'm sorry, I'm having technical difficulties. Please try again later.",
-                voice="alice",
+            base_url = _build_base_url(request)
+
+            try:
+                mp3_audio = tts_service.generate_audio(greeting)
+                if not mp3_audio or len(mp3_audio) == 0:
+                    raise ValueError("Generated audio is empty")
+
+                audio_id = str(uuid.uuid4())
+                _audio_cache[audio_id] = mp3_audio
+                audio_url = f"{base_url}/api/v1/twilio/audio/{audio_id}"
+                response.play(audio_url)
+            except Exception as e:
+                logger.error("ElevenLabs TTS failed, using fallback",
+                             call_sid=CallSid, error=str(e))
+                response.say(greeting, voice="alice", language="en-US")
+
+            gather_action_url = f"{base_url}/api/v1/twilio/response"
+            response.gather(
+                input="speech",
+                action=gather_action_url,
+                method="POST",
+                speech_timeout="auto",
                 language="en-US",
             )
+
+            return Response(content=str(response), media_type="application/xml")
+        except Exception as e:
+            logger.error("Failed to handle initial call",
+                         call_sid=CallSid, error=str(e), exc_info=True)
+            response = VoiceResponse()
+            response.say("I'm sorry, I'm having technical difficulties. Please try again later.",
+                         voice="alice", language="en-US")
             return Response(content=str(response), media_type="application/xml")
 
-    elif CallStatus == "in-progress":
-        # Call is active
-        return Response(content="OK", status_code=200)
-
     elif CallStatus == "completed":
-        # Call ended
         twilio_service.handle_status_callback(CallSid, CallStatus)
-        return Response(content="OK", status_code=200)
 
-    # Default response for other statuses
     return Response(content="OK", status_code=200)
 
 
+@router.post("/response")
+async def handle_response(
+    request: Request,
+    CallSid: str = Form(...),
+    SpeechResult: str = Form(None),
+):
+    """Handle user speech input and return agent response."""
+    if not await _validate_twilio_request(request):
+        return Response(content="Invalid signature", status_code=403)
+
+    user_text = SpeechResult.strip() if SpeechResult else ""
+
+    if not user_text:
+        logger.warning("Empty speech result", call_sid=CallSid)
+        response = VoiceResponse()
+        response.say("I'm sorry, I didn't catch that. Could you please repeat?",
+                     voice="alice", language="en-US")
+        base_url = _build_base_url(request)
+        response.gather(
+            input="speech",
+            action=f"{base_url}/api/v1/twilio/response",
+            method="POST",
+            speech_timeout="auto",
+            language="en-US",
+        )
+        return Response(content=str(response), media_type="application/xml")
+
+    try:
+        result = await support_orchestrator.process_user_response(
+            call_sid=CallSid,
+            user_text=user_text,
+            tenant_id="default",  # Future: Extract from phone number routing or metadata
+            session_id=CallSid,
+        )
+
+        agent_response = result.get(
+            "response", "I understand. Let me continue.")
+        is_complete = result.get("is_complete", False)
+
+        response = VoiceResponse()
+        base_url = _build_base_url(request)
+
+        try:
+            mp3_audio = tts_service.generate_audio(agent_response)
+            if not mp3_audio or len(mp3_audio) == 0:
+                raise ValueError("Generated audio is empty")
+
+            audio_id = str(uuid.uuid4())
+            _audio_cache[audio_id] = mp3_audio
+            audio_url = f"{base_url}/api/v1/twilio/audio/{audio_id}"
+            response.play(audio_url)
+        except Exception as e:
+            logger.error("ElevenLabs TTS failed, using fallback",
+                         call_sid=CallSid, error=str(e))
+            response.say(agent_response, voice="alice", language="en-US")
+
+        if is_complete:
+            logger.info("Call completed", call_sid=CallSid)
+            response.hangup()
+        else:
+            response.gather(
+                input="speech",
+                action=f"{base_url}/api/v1/twilio/response",
+                method="POST",
+                speech_timeout="auto",
+                language="en-US",
+            )
+
+        return Response(content=str(response), media_type="application/xml")
+    except Exception as e:
+        logger.error("Failed to handle response",
+                     call_sid=CallSid, error=str(e), exc_info=True)
+        response = VoiceResponse()
+        response.say("I'm sorry, I'm having technical difficulties. Please try again later.",
+                     voice="alice", language="en-US")
+        return Response(content=str(response), media_type="application/xml")
 
 
 @router.post("/status")
@@ -172,19 +219,32 @@ async def handle_status_callback(
     CallDuration: str = Form(None),
 ):
     """Handle Twilio status callbacks."""
-    # Validate request
-    url = str(request.url)
     form_data = await request.form()
     params = {key: value for key, value in form_data.items()}
     signature = request.headers.get("X-Twilio-Signature", "")
-    
+
     validator = RequestValidator(settings.TWILIO_AUTH_TOKEN)
-    if not validator.validate(url, params, signature):
-        logger.warning("Invalid Twilio status callback signature", url=url)
+    if not validator.validate(str(request.url), params, signature):
         return Response(content="Invalid signature", status_code=403)
 
     duration = int(CallDuration) if CallDuration else None
     twilio_service.handle_status_callback(CallSid, CallStatus, duration)
-
     return {"status": "ok"}
 
+
+@router.get("/audio/{audio_id}")
+async def serve_audio(audio_id: str):
+    """Serve cached audio files generated by ElevenLabs TTS."""
+    if audio_id not in _audio_cache:
+        logger.warning("Audio file not found", audio_id=audio_id)
+        return Response(content="Audio not found", status_code=404)
+
+    audio_bytes = _audio_cache[audio_id]
+    return Response(
+        content=audio_bytes,
+        media_type="audio/mpeg",
+        headers={
+            "Content-Disposition": f'inline; filename="{audio_id}.mp3"',
+            "Cache-Control": "no-cache",
+        },
+    )

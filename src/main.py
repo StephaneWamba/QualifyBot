@@ -34,14 +34,9 @@ async def lifespan(app: FastAPI):
         # Don't fail startup - will fall back to memory checkpointer
     
     logger.info("QualifyBot API started")
-    
-    # Log registered WebSocket routes for debugging
-    ws_routes = [route.path for route in app.routes if hasattr(route, "path") and "websocket" in str(type(route)).lower()]
-    logger.info("Registered WebSocket routes", routes=ws_routes)
 
     yield
 
-    # Shutdown
     logger.info("Shutting down QualifyBot API")
     try:
         await close_checkpointer()
@@ -58,43 +53,16 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title="QualifyBot API",
-    description="Sales Qualification Voice Bot",
+    description="IT Support Voice Assistant - Automated IT helpdesk via phone calls",
     version="0.1.0",
     lifespan=lifespan,
 )
 
 
-# Add request logging middleware (log WebSocket upgrade attempts)
 @app.middleware("http")
 async def log_requests(request: Request, call_next):
-    """Log all incoming requests."""
-    # Log WebSocket upgrade requests
-    if request.headers.get("upgrade", "").lower() == "websocket":
-        logger.info(
-            "WebSocket upgrade request received",
-            method=request.method,
-            url=str(request.url),
-            path=request.url.path,
-            client=request.client.host if request.client else None,
-            upgrade_header=request.headers.get("upgrade"),
-            connection_header=request.headers.get("connection"),
-        )
-        return await call_next(request)
-    
-    logger.info(
-        "Incoming request",
-        method=request.method,
-        url=str(request.url),
-        path=request.url.path,
-        client=request.client.host if request.client else None,
-    )
+    """Log incoming requests."""
     response = await call_next(request)
-    logger.info(
-        "Request completed",
-        method=request.method,
-        path=request.url.path,
-        status_code=response.status_code,
-    )
     return response
 
 # CORS middleware

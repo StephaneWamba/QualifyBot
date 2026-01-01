@@ -27,6 +27,7 @@ ENV PATH="/app/.venv/bin:$PATH"
 # Expose port
 EXPOSE 8000
 
-# Run with hot reload (watch only src directory, exclude large files)
-CMD ["uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload", "--reload-dir", "/app/src", "--reload-exclude", "*.pyc", "--reload-exclude", "__pycache__", "--reload-exclude", "*.log"]
+# Run with hot reload (watch src directory and config files)
+# Using watchfiles for better performance with Docker volume mounts
+CMD ["uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload", "--reload-dir", "/app/src", "--reload-include", "*.py", "--reload-exclude", "*.pyc", "--reload-exclude", "__pycache__", "--reload-exclude", "*.log", "--reload-delay", "0.25"]
 
