@@ -16,7 +16,25 @@ Automated voice assistant that:
 - Provides step-by-step troubleshooting
 - Retrieves solutions from knowledge base
 - Escalates complex issues to humans
-- Creates tickets automatically
+- Creates tickets automatically in Jira
+
+## Architecture
+
+```mermaid
+graph TB
+    User[User Calls] --> Twilio[Twilio Voice]
+    Twilio --> Webhook[FastAPI Webhook]
+    Webhook --> Orchestrator[Support Orchestrator]
+    Orchestrator --> Graph[LangGraph Agent]
+    Graph --> LLM[OpenAI GPT-4o-mini]
+    Graph --> KB[KB Retrieval RAG]
+    Graph --> Jira[Jira Service]
+    Graph --> DB[(PostgreSQL)]
+    Graph --> TTS[ElevenLabs TTS]
+    KB --> ChromaDB[(ChromaDB)]
+    Graph --> Logger[Conversation Logger]
+    TTS --> Twilio
+```
 
 ## Documentation
 

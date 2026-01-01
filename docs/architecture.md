@@ -14,22 +14,24 @@ graph TB
     Graph --> KB[KB Retrieval RAG]
     Graph --> Jira[Jira Service]
     Graph --> DB[(PostgreSQL)]
+    Graph --> TTS[ElevenLabs TTS]
     KB --> ChromaDB[(ChromaDB)]
     Graph --> Logger[Conversation Logger]
+    TTS --> Twilio
 ```
 
 ## Architecture Principles
 
 ### LLM-First Design
 
-The system uses a **simple, LLM-powered approach** - no complex heuristics or state machines. The LLM handles:
+The system uses a **simple, LLM-powered approach**. The LLM handles:
 
 - Understanding user intent
 - Generating natural responses
 - Deciding when to escalate
 - Managing conversation flow
 
-This makes the system **reliable across all scenarios** without brittle rule-based logic.
+This makes the system **reliable across all scenarios** through natural language understanding.
 
 ### Low Latency Optimization
 
@@ -98,9 +100,9 @@ graph LR
 
 ### 3. LLM-Powered Agent
 
-**Single Node Architecture** - All logic handled by LLM:
+All logic handled by LLM:
 
-The agent uses a **single troubleshooting node** that processes every user message. This simplicity eliminates complex state transitions and makes the system more reliable.
+The agent processes every user message through the troubleshooting node. This design provides consistent, reliable responses.
 
 **How it works:**
 
@@ -114,7 +116,7 @@ The agent uses a **single troubleshooting node** that processes every user messa
 8. Creates tickets or saves to DB if needed
 9. Returns response to Twilio for TTS
 
-**Key Design Decision**: No intent classification, state machines, or validation layers. The LLM's natural language understanding handles all edge cases.
+**Key Design Decision**: The LLM's natural language understanding handles all edge cases through conversation context.
 
 ```mermaid
 graph TB
@@ -363,10 +365,10 @@ SupportTicketState:
 
 - **Graceful Degradation**:
 
-  - KB retrieval fails → Continue without KB context
-  - Caller history fails → Continue without personalization
+  - KB retrieval fails → Continue with LLM knowledge only
+  - Caller history fails → Continue with standard greeting
   - Jira creation fails → Log error, continue conversation
-  - **Result**: User always gets a response, even if some features fail
+  - **Result**: User always gets a response, system continues operating
 
 - **Fallback Responses**:
 
@@ -374,11 +376,11 @@ SupportTicketState:
   - Empty LLM response → "I understand. How can I help you?"
   - **Result**: Never leaves user hanging
 
-- **Retry Logic**:
+- **Error Recovery**:
 
-  - Not implemented (simplicity over complexity)
   - Errors are logged and system continues
-  - **Result**: Fast failures, no retry delays
+  - Fast failure detection with immediate fallback
+  - **Result**: Minimal latency, always responsive
 
 - **Logging**:
   - All errors logged with full context (call_sid, error, stack trace)
@@ -392,7 +394,7 @@ SupportTicketState:
 - **Stateless API**:
 
   - FastAPI handles concurrent requests
-  - No in-memory state (all in Redis/DB)
+  - All state stored in Redis/DB
   - **Result**: Can run multiple instances behind load balancer
 
 - **Redis Checkpointing**:
