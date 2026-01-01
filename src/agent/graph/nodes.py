@@ -32,7 +32,7 @@ def _get_system_prompt(kb_context: str | None = None, caller_history: str | None
 
     return f"""You are {agent_persona.name}, IT support.
 
-Rules: ONE step at a time. Wait for confirmation. Conversational, not robotic. Answer naturally. Escalate if: user requests, security breach, hardware damage, or multiple attempts fail.
+Rules: ONE step at a time. Wait for confirmation. Conversational, not robotic. If user asks for human OR mentions security/encryption/hardware damage, escalate immediately.
 
 Style: Warm, helpful, patient.{history_section}{kb_section}
 
@@ -70,13 +70,89 @@ async def troubleshooting_node(state: SupportTicketState) -> dict[str, Any]:
         logger.warning("No user message found", call_sid=call_sid)
         return {}
 
-    # Check for call ending
     user_message_lower = last_user_message.lower()
+
+    # Check for call ending
     if any(phrase in user_message_lower for phrase in ["goodbye", "bye", "that's all", "nothing else", "no thanks", "i'm done"]):
         closing_message = "Thanks for calling IT Support! Have a great day!"
         return {
             "messages": messages + [AIMessage(content=closing_message)],
             "is_complete": True,
+        }
+
+    # Deterministic escalation check (before LLM call)
+    escalation_keywords = [
+        "escalate", "human", "speak to someone", "talk to a person",
+        "connect me with", "transfer me", "real person", "actual person"
+    ]
+    security_keywords = [
+        "encrypted", "ransomware", "security breach", "hacked",
+        "malware", "virus", "data breach", "security issue"
+    ]
+
+    explicit_escalation = any(
+        phrase in user_message_lower for phrase in escalation_keywords)
+    security_issue = any(
+        phrase in user_message_lower for phrase in security_keywords)
+
+    if explicit_escalation or security_issue:
+        # Immediate escalation - don't call LLM
+        escalation_message = "I understand. Let me connect you with a human specialist right away."
+
+        try:
+            session_id = state.get("session_id", call_sid)
+            from_number = state.get("from_number", "")
+            to_number = state.get("to_number", "")
+
+            # Create Jira ticket
+            jira_ticket_key = None
+            try:
+                priority = "High" if security_issue else "Medium"
+                jira_ticket_key = await jira_service.create_ticket(
+                    summary=f"IT Support: {'Security Issue' if security_issue else 'User Requested Escalation'}",
+                    description=last_user_message,
+                    issue_type="Task",
+                    priority=priority,
+                    labels=["voice-support", "escalated",
+                            "security"] if security_issue else ["voice-support", "escalated"],
+                )
+            except Exception as e:
+                logger.error("Failed to create Jira ticket",
+                             call_sid=call_sid, error=str(e))
+
+            # Save to database
+            try:
+                ticket_id = f"TICKET-{call_sid[:8]}-{uuid.uuid4().hex[:8]}"
+                async with AsyncSessionLocal() as db_session:
+                    await ticket_service.create_or_update_ticket(
+                        session=db_session,
+                        ticket_id=ticket_id,
+                        call_sid=call_sid,
+                        session_id=session_id,
+                        tenant_id=tenant_id,
+                        from_number=from_number,
+                        to_number=to_number,
+                        ticket_data=ticket_data or {
+                            "issue_description": last_user_message},
+                        conversation_summary=f"{'Security issue: ' if security_issue else ''}{last_user_message}",
+                        jira_ticket_key=jira_ticket_key,
+                        status="escalated",
+                        kb_articles_used=state.get("kb_articles_used", []),
+                    )
+                    await db_session.commit()
+            except Exception as e:
+                logger.error("Failed to save ticket",
+                             call_sid=call_sid, error=str(e))
+        except Exception as e:
+            logger.error("Escalation handling failed",
+                         call_sid=call_sid, error=str(e))
+
+        return {
+            "messages": messages + [AIMessage(content=escalation_message)],
+            "ticket_data": ticket_data or {"issue_description": last_user_message},
+            "is_resolved": False,
+            "is_escalated": True,
+            "is_complete": False,
         }
 
     # Get caller history for personalization
